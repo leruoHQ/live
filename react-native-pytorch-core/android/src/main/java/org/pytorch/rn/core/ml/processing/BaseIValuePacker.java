@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -141,6 +141,8 @@ public class BaseIValuePacker implements IIValuePacker {
         .register(
             "tensor", (ivalue, jobject, map, packerContext) -> unpackTensor(ivalue, jobject, map))
         .register(
+            "tensor_list", (ivalue, jobject, map, packerContext) -> unpackTensorList(ivalue.toTensorList(), jobject.getJSONArray(JSON_ITEMS), map))
+        .register(
             "scalar_long",
             (ivalue, jobject, map, packerContext) ->
                 map.putInt(jobject.getString(JSON_KEY), (int) ivalue.toLong()))
@@ -174,10 +176,15 @@ public class BaseIValuePacker implements IIValuePacker {
                 map.putString(
                     jobject.getString(JSON_KEY), decodeBertQAAnswer(ivalue, packerContext)))
         .register(
+            "yolo_v5",
+            (ivalue, jobject, map, packerContext) ->
+                map.putArray(
+                    jobject.getString(JSON_KEY), decodeYoloTensors(ivalue.toTensor(), jobject, packerContext)))
+        .register(
             "bounding_boxes",
             (ivalue, jobject, map, packerContext) ->
                 map.putArray(
-                    jobject.getString("key"), decodeObjects(ivalue, jobject, packerContext)));
+                    jobject.getString(JSON_KEY), decodeObjects(ivalue, jobject, packerContext)));
   }
 
   private String applyParams(final String specSrc, final ReadableMap params) {
@@ -259,6 +266,62 @@ public class BaseIValuePacker implements IIValuePacker {
 
     return getBertTokenizer(packerContext)
         .decode(Arrays.copyOfRange(tokenIds, startIdx, endIdx + 1));
+  }
+
+  private WritableArray decodeYoloTensors(
+    final Tensor tensor,
+    final JSONObject jobject,
+    final PackerContext packerContext)
+      throws IOException, JSONException {
+    final String PROBABILITY_THRESHOLD_KEY = "probabilityThreshold";
+
+    if (!jobject.has(PROBABILITY_THRESHOLD_KEY)) {
+      throw new IllegalStateException(
+          "model param value for " + PROBABILITY_THRESHOLD_KEY + " is missing [0, 1]");
+    }
+
+    final double probabilityThreshold = jobject.getDouble(PROBABILITY_THRESHOLD_KEY);
+    final float[] predictionsTensor = tensor.getDataAsFloatArray();
+    final long[] predictionsShape = tensor.shape();
+    System.out.println("[leruo-log] predictionsShape: " + Arrays.toString(Arrays.copyOfRange(predictionsTensor, 0, 12)));
+    System.out.println("[leruo-log] predictionsShape: " + Arrays.toString(Arrays.copyOfRange(predictionsTensor, 12, 24)));
+    System.out.println("[leruo-log] predictionsShape: " + Arrays.toString(Arrays.copyOfRange(predictionsTensor, 24, 36)));
+    System.out.println("[leruo-log] predictionsShape: " + Arrays.toString(Arrays.copyOfRange(predictionsTensor, 36, 48)));
+    int detected = 0;
+
+    WritableArray result = Arguments.createArray();
+    for (int i = 0; i < predictionsShape[1]; i++) {
+      float confidence = predictionsTensor[i * 6 + 4] * predictionsTensor[i * 6 + 5]; // conf = obj_conf * cls_conf
+      if (i < 10) {
+        System.out.println("[leruo-log] predictionsTensor confidence " + probabilityThreshold + " " + i + ": [" + predictionsTensor[i * 6 + 4] + "]");
+        System.out.println("[leruo-log] predictionsTensor confidence computed" + confidence  + "]");
+      }
+      if (confidence >= probabilityThreshold) {
+        detected++;
+        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        System.out.println("[leruo-log] predictionsTensor selected " + i + ": [" + predictionsTensor[i * 6] + 
+          "] [" + predictionsTensor[i * 6 + 1] +
+          "] [" + predictionsTensor[i * 6 + 2] +
+          "] [" + predictionsTensor[i * 6 + 3] +
+          "] [" + predictionsTensor[i * 6 + 4] +
+          "] [" + predictionsTensor[i * 6 + 5] + "]");
+
+        WritableMap match = Arguments.createMap();
+        WritableArray bounds = Arguments.createArray();
+        bounds.pushDouble(predictionsTensor[i * 6]);
+        bounds.pushDouble(predictionsTensor[i * 6 + 1]);
+        bounds.pushDouble(predictionsTensor[i * 6 + 2]);
+        bounds.pushDouble(predictionsTensor[i * 6 + 3]);
+        match.putArray("bounds", bounds);
+        match.putDouble("confidence", predictionsTensor[i * 6 + 4]);
+
+        result.pushMap(match);
+      }
+    }
+    
+    System.out.println("[leruo-log] detected: " + detected);
+
+    return result;
   }
 
   private WritableArray decodeObjects(
@@ -382,10 +445,66 @@ public class BaseIValuePacker implements IIValuePacker {
     map.putString(key, ivalue.toStr());
   }
 
-  private static void unpackTensor(
+  private void unpackTensorList(
+    final Tensor[] tarray,
+    final JSONArray jarray,
+    final WritableMap map)
+      throws JSONException, IOException {
+    System.out.println("[leruo-log] >------------------------------------------------------------");
+    System.out.println("[leruo-log] unpackTensorList tensors[0] " + tarray[0].toString());
+    System.out.println("[leruo-log]" + tarray.length + " " + jarray.length());
+    if (tarray.length != jarray.length()) {
+      throw new IllegalArgumentException("IValue and JSONArray sizes do not match");
+    }
+
+    for (int i = 0; i < tarray.length; i++) {
+      System.out.println("[leruo-log] unpackTensorList Tensor.shape " + tarray[i].toString());
+      map.putString(i + "", tarray[i].toString());
+    }
+    System.out.println("[leruo-log] <------------------------------------------------------------");
+  } 
+
+  private static void unpackTensorList_(
       final IValue ivalue, final JSONObject jobject, final WritableMap map) throws JSONException {
+    System.out.println("[leruo-log] >------------------------------------------------------------");
+    System.out.println("[leruo-log] unpackTensorList");
+    System.out.println("[leruo-log] unpackTensorList jobject " + jobject);
+    System.out.println("[leruo-log] unpackTensorList ivalue " + ivalue);
+    System.out.println("[leruo-log] unpackTensorList map " + map);
     final String key = jobject.getString(JSON_KEY);
     final String dtype = jobject.getString(JSON_DTYPE);
+    System.out.println("[leruo-log] unpackTensorList dtype & key " + dtype + " " + key);
+    System.out.println("[leruo-log] <------------------------------------------------------------");
+    Tensor[] tensors = ivalue.toTensorList();
+    switch (dtype) {
+      case JSON_FLOAT:
+        for (int i = 0; i < tensors.length; i++) {
+          System.out.println("[leruo-log] unpackTensorList tensors[i] " + tensors[i].toString());
+          map.putArray(key + "_" + i, unpackTensorFloatData(tensors[i].getDataAsFloatArray()));
+        }
+        return;
+      case JSON_LONG:
+        for (int i = 0; i < tensors.length; i++) {
+          System.out.println("[leruo-log] unpackTensorList tensors[i] " + tensors[i].toString());
+          map.putArray(key + "_" + i, unpackTensorLongData(tensors[i].getDataAsLongArray()));
+        }
+        return;
+    }
+
+    throw new IllegalArgumentException("Unknown dtype");
+  }
+
+  private static void unpackTensor(
+      final IValue ivalue, final JSONObject jobject, final WritableMap map) throws JSONException {
+    System.out.println("[leruo-log] >------------------------------------------------------------");
+    System.out.println("[leruo-log] unpackTensor");
+    System.out.println("[leruo-log] unpackTensor jobject " + jobject);
+    System.out.println("[leruo-log] unpackTensor ivalue " + ivalue);
+    System.out.println("[leruo-log] unpackTensor Tensor.shape " + ivalue.toTensor().toString());
+    final String key = jobject.getString(JSON_KEY);
+    final String dtype = jobject.getString(JSON_DTYPE);
+    System.out.println("[leruo-log] unpackTensor dtype & key " + dtype + " " + key);
+    System.out.println("[leruo-log] <------------------------------------------------------------");
     switch (dtype) {
       case JSON_FLOAT:
         map.putArray(key, unpackTensorFloatData(ivalue.toTensor().getDataAsFloatArray()));
@@ -500,6 +619,13 @@ public class BaseIValuePacker implements IIValuePacker {
       final WritableMap map,
       final PackerContext packerContext)
       throws JSONException, IOException {
+    System.out.println("[leruo-log] >============================================================");
+    System.out.println("[leruo-log] unpacking list");
+    System.out.println("[leruo-log]" + iarray.length + " " + jarray.length());
+    System.out.println("[leruo-log] jarray" + jarray);
+    System.out.println("[leruo-log] map" + map);
+    System.out.println("[leruo-log] packerContext" + packerContext);
+    System.out.println("[leruo-log] <============================================================");
     if (iarray.length != jarray.length()) {
       throw new IllegalArgumentException("IValue and JSONArray sizes do not match");
     }
