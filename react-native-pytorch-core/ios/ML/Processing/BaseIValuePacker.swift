@@ -55,10 +55,12 @@ class BaseIValuePacker: IIValuePacker {
 
             // Default unpackers
             try PackerRegistry.register(type: "tensor", unpacker: TensorUnpacker())
+            try PackerRegistry.register(type: "tensor_list", unpacker: TensorListUnpacker())
             try PackerRegistry.register(type: "argmax", unpacker: ArgmaxUnpacker())
             try PackerRegistry.register(type: "tensor_to_image", unpacker: TensorToImageUnpacker())
             try PackerRegistry.register(type: "bert_decode_qa_answer", unpacker: BertDecodeQAAnswerUnpacker())
             try PackerRegistry.register(type: "bounding_boxes", unpacker: BoundingBoxesUnpacker())
+            try PackerRegistry.register(type: "yolo_v5", unpacker: YoloV5Unpacker())
             try PackerRegistry.register(type: "string", unpacker: StringUnpacker())
         } catch {
             // nothing

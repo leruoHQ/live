@@ -22,6 +22,7 @@ NS_SWIFT_NAME(IValue)
 - (BOOL)isTensor;
 
 - (nullable PTMTensor*)toTensor;
+- (nullable NSArray<PTMTensor*>*)toTensorList;
 
 - (nullable NSDictionary<NSString*, PTMIValue*>*)toDictStringKey;
 

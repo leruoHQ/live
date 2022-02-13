@@ -12,6 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface PTMTensor ()
 
 + (instancetype)fromTensor:(const at::Tensor&)tensor;
++ (instancetype)fromTensorList:(const c10::List<at::Tensor>&)tensorList;
 
 @property(nonatomic, readonly) at::Tensor tensor;
 

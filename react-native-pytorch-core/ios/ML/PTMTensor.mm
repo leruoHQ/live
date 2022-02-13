@@ -18,6 +18,15 @@
     return ptmTensor;
 }
 
++ (instancetype)fromTensorList:(const c10::List<at::Tensor>&)tensorList {
+    PTMTensor *ptmTensors[tensorList.size()];
+    for (int i = 0; i < tensorList.size(); i++) {
+        ptmTensors[i] = [PTMTensor new];
+        ptmTensors[i]->_tensor = tensorList.get(i);
+    }
+    return *ptmTensors;
+}
+
 + (nullable instancetype)fromBlob:(void *)data shape:(NSArray<NSNumber*>*)shape dtype:(PTMTensorType)dtype {
     std::vector<int64_t> shapeVector = {};
     for (NSNumber * n in shape) {

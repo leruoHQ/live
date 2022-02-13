@@ -26,6 +26,7 @@
     return ptmIValue;
 }
 
+
 - (BOOL)isTensor {
     return _ivalue.isTensor();
 }
@@ -37,6 +38,15 @@
     
     at::Tensor tensor = _ivalue.toTensor();
     return [PTMTensor fromTensor:tensor];
+}
+
+- (nullable NSArray<PTMTensor*>*)toTensorList {
+    if (_ivalue.isTensor() == NO) {
+        return nil;
+    }
+    
+    c10::List<at::Tensor> tensorList = _ivalue.toTensorList();
+    return [NSArray<PTMTensor*> arrayWithObjects:[PTMTensor fromTensorList:tensorList], nil];
 }
 
 - (nullable NSString*)toString {
@@ -73,3 +83,4 @@
 }
 
 @end
+
