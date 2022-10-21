@@ -6,6 +6,7 @@
  */
 
 #include <torch/csrc/jit/mobile/import.h>
+#include <android/log.h>
 
 #include "../torch/utils/helpers.h"
 #include "ATen/core/ivalue.h"
@@ -30,9 +31,157 @@ torch_::jit::mobile::Module AbstractScriptModule::loadScriptModule(
   return torch_::jit::_load_for_mobile(is, torch_::kCPU);
 }
 
+bool compareBoundingBoxes(std::array<float, 5> boxes1, std::array<float, 5> boxes2) {
+  return boxes1[4] - boxes2[4];
+}
+
+bool IOU(std::array<float, 5> a, std::array<float, 5> b) {
+  auto areaA = (a[2] - a[0]) * (a[3] - a[1]);
+  if (areaA <= 0.0) return 0.0;
+
+  auto areaB = (b[2] - b[0]) * (b[3] - b[1]);
+  if (areaB <= 0.0) return 0.0;
+
+  auto intersectionMinX = std::max(a[0], b[0]);
+  auto intersectionMinY = std::max(a[1], b[1]);
+  auto intersectionMaxX = std::min(a[2], b[2]);
+  auto intersectionMaxY = std::min(a[3], b[3]);
+  auto intersectionArea =
+    std::max(intersectionMaxY - intersectionMinY, 0.0f) * std::max(intersectionMaxX - intersectionMinX, 0.0f);
+  return intersectionArea / (areaA + areaB - intersectionArea);
+}
+
+c10::IValue AbstractScriptModule::nms(c10::IValue output) {
+  at::Tensor tensor = output.toTensor();
+  int rows = tensor.size(0);
+  // float results[rows][5];
+  std::vector<std::array<float, 5>> results;
+  // int resultsSize = 0;
+
+  float predictionThreshold = 0.8;
+  float iOUThreshold = 0.3;
+  int nMSLimit = 15;
+  // TODO: PARAMS
+  float imgScaleX = 1080 / 640;
+  float imgScaleY = 1920 / 640;
+  int startX = 0;
+  int startY = 0;
+  // TODO: PARAMS
+  // auto accessor = tensor.accessor<float, 0>();
+  // CLEAN UP LOW SCORES
+  for (int i = 0; i < rows; i++) {
+    auto outputs = tensor.index({0, i}).data_ptr<float>();
+    // auto outputs = accessor[i].data();
+    // Only consider an object detected if it has a confidence score of over predictionThreshold
+    float score = outputs[4];
+    if (score > predictionThreshold) {
+      // Calulate the bound of the detected object bounding box
+      auto x = outputs[0];
+      auto y = outputs[1];
+      auto w = outputs[2];
+      auto h = outputs[3];
+
+      auto left = imgScaleX * (x - w / 2);
+      auto top = imgScaleY * (y - h / 2);
+
+      std::array<float, 5> bounds = {
+        startX + left,
+        startY + top,
+        w * imgScaleX,
+        h * imgScaleY,
+        score,
+      };
+      results.push_back(bounds);
+      // results[i][0] = startX + left;
+      // results[i][1] = startY + top;
+      // results[i][2] = w * imgScaleX;
+      // results[i][3] = h * imgScaleY;
+      // results[i][4] = score;
+      // auto boundsTensor = torch_::zeros(4);
+      // boundsTensor.index_put_({0}, startX + left);
+      // boundsTensor.index_put_({1}, startY + top);
+      // boundsTensor.index_put_({2}, w * imgScaleX);
+      // boundsTensor.index_put_({3}, h * imgScaleY);
+
+      // results.index_put_({i}, boundsTensor);
+      // resultsSize++;
+    }
+
+    // results.resize_(resultsSize);
+  }
+
+  // PERFORM NMS
+  int resultsSize = results.size();
+  std::sort(results.begin(), results.end(), compareBoundingBoxes);
+  at::Tensor resultsTensor = torch_::zeros({resultsSize, 5});
+  int totalResults = 0;
+
+  bool active[resultsSize];
+  for(int i = 0; i < resultsSize; i++){
+    active[i] = true;
+  }
+  int numActive = resultsSize;
+
+  // The algorithm is simple: Start with the box that has the highest score.
+  // Remove any remaining boxes that overlap it more than the given threshold
+  // amount. If there are any boxes left (i.e. these did not overlap with any
+  // previous boxes), then repeat this procedure, until no more boxes remain
+  // or the limit has been reached.
+  bool done = false;
+  for (int i = 0; i < resultsSize && !done; i++) {
+    if (active[i]) {
+      auto boxA = results[i];
+      auto boundsTensor = torch_::zeros(5);
+      boundsTensor.index_put_({0}, results[i][0]);
+      boundsTensor.index_put_({1}, results[i][1]);
+      boundsTensor.index_put_({2}, results[i][2]);
+      boundsTensor.index_put_({3}, results[i][3]);
+      boundsTensor.index_put_({4}, results[i][4]);
+      resultsTensor.index_put_({i}, boundsTensor);
+      totalResults++;
+      if (totalResults >= nMSLimit) break;
+
+      for (int j = i + 1; j < resultsSize; j++) {
+        if (active[j]) {
+          auto boxB = results[j];
+          if (IOU(boxA, boxB) > iOUThreshold) {
+            active[j] = false;
+            numActive -= 1;
+            if (numActive <= 0) {
+              done = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  resultsTensor.resize_(totalResults);
+
+  __android_log_print(ANDROID_LOG_ERROR, "leruo", "leruo size[0]=%ld dim=%ld final_results=%d above_thresh_results=%d", resultsTensor.size(0), resultsTensor.dim(), totalResults, resultsSize);
+  // std::stringstream ss1;
+  // std::stringstream ss2;
+  // assigning the value of num_float to ss1
+  // ss1 << resultsTensor.size(0);
+
+  // assigning the value of num_float to ss2
+  // ss2 << resultsTensor.dim();
+
+  // initializing two string variables with the values of ss1 and ss2
+  // and converting it to string format with str() function
+  // std::string str1 = ss1.str();
+  // std::string str2 = ss2.str();
+  // __android_log_print(ANDROID_LOG_ERROR, "leruo size[0]=%s dim=%s", ss1, ss2);
+  // __android_log_print(ANDROID_LOG_ERROR, "leruo tensor=%s", resultsTensor.toString());
+  // __android_log_print(ANDROID_LOG_ERROR, "leruo dim=%f" );
+
+  return resultsTensor;
+}
+
 c10::IValue AbstractScriptModule::forward(
     std::vector<torch_::jit::IValue> inputs) {
-  return this->scriptmodule_.forward(inputs);
+  return AbstractScriptModule::nms(this->scriptmodule_.forward(inputs));
 }
 
 std::vector<torch_::jit::IValue> AbstractScriptModule::parseInput(

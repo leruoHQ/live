@@ -61,6 +61,10 @@ class AbstractScriptModule {
       const facebook::jsi::Value& thisValue,
       const facebook::jsi::Value* arguments,
       size_t count);
+  /**
+   * This function applies non-minimal supression to the output
+   */
+  c10::IValue nms(c10::IValue output);
 
   /**
    * This function apply the operator on the inputs.
