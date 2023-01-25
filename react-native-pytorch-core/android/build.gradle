@@ -54,7 +54,7 @@ android {
       cmake {
         cppFlags "-fexceptions", "-frtti", "-std=c++1y", "-DONANDROID"
         abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
-        arguments '-DANDROID_STL=c++_shared', "-DNODE_MODULES_DIR=${rootDir}/../node_modules", "-DREACT_NATIVE_MINOR_VERSION=${appRnMinorVersion}"
+        arguments '-DANDROID_STL=c++_shared', "-DNODE_MODULES_DIR=${rootDir}/../node_modules", "-DREACT_NATIVE_MINOR_VERSION=${appRnMinorVersion}", "-DUSE_KINETO=0", "-DUSE_CAFFA2=0", "-DBUILD_CAFFA2=0","-DUSE_KINETO=0", "-DBUILD_CAFFE2=0", "-DUSE_DISTRIBUTED=0", "-DUSE_NCCL=0", "-DBUILD_TEST=0", "-DUSE_XNNPACK=0", "-DUSE_FBGEMM=0", "-DUSE_QNNPACK=0", "-DUSE_MKLDNN=0", "-DUSE_MIOPEN=0", "-DUSE_NNPACK=0", "-DBUILD_CAFFE2_OPS=0", "-DUSE_TENSORPIPE=0"
       }
     }
   }

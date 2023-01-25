@@ -9,11 +9,25 @@ set (CMAKE_VERBOSE_MAKEFILE ON)
 
 # This should be matched with the Unit Test Build. Please keep them in sync. See ../cxx/test/CMakeLists.txt
 set (CMAKE_CXX_STANDARD 14)
-set (CMAKE_CXX_FLAGS "-DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID")
-
+set (CMAKE_CXX_FLAGS "-DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID -DUSE_CAFFA2=0 -DBUILD_CAFFA2=0")
+# set (CMAKE_CXX_FLAGS "-DFOLLY_NO_CONFIG=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -DFOLLY_HAVE_MEMRCHR=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_MOBILE=1 -DON_ANDROID -DONANDROID -DUSE_KINETO=0 -DBUILD_CAFFE2=0 -DUSE_DISTRIBUTED=0 -DUSE_NCCL=0 -DBUILD_TEST=0 -DUSE_XNNPACK=0 -DUSE_FBGEMM=0 -DUSE_QNNPACK=0 -DUSE_MKLDNN=0 -DUSE_MIOPEN=0 -DUSE_NNPACK=0 -DBUILD_CAFFE2_OPS=0 -DUSE_TENSORPIPE=0")
 set (PACKAGE_NAME "torchlive")
 set (BUILD_DIR ${CMAKE_SOURCE_DIR}/build)
 set (RN_SO_DIR ${NODE_MODULES_DIR}/react-native/ReactAndroid/src/main/jni/first-party/react/jni)
+
+# set (TorchVision_DIR "/home/leruo/torchvision/build")
+set (TorchVision_DIR "/home/leruo/torchvision/build/")
+set (Torch_DIR "/home/leruo/libs/libtorch/build")
+set (Caffe2_DIR "/home/leruo/libs/libtorch/torch/share/cmake/Caffe2")
+set (TORCH_LIBRARY "/home/leruo/libs/libtorch/build")
+set (C10_LIBRARY "/home/leruo/libs/libtorch/build/libs")
+# set (Torch_DIR "/home/leruo/libs/libtorch/share/cmake/Torch")
+# set (Caffe2_DIR "/home/leruo/libs/libtorch/share/cmake/Caffe2")
+# set (ATen_DIR "/home/leruo/libs/libtorch/share/cmake/ATen")
+# set (Tensorpipe_DIR "/home/leruo/libs/libtorch/share/cmake/Tensorpipe")
+list(APPEND CMAKE_PREFIX_PATH "/home/leruo/libs/libtorch/build/libs")
+list(APPEND CMAKE_PREFIX_PATH "/home/leruo/libs/libtorch/build")
+list(APPEND CMAKE_PREFIX_PATH "/home/leruo/torchvision/build")
 
 # PyTorch Core shared
 
@@ -84,6 +98,11 @@ target_include_directories(
 
 file (GLOB LIBRN_DIR "${BUILD_DIR}/react-native-0*/jni/${ANDROID_ABI}")
 file (GLOB PYTORCH_LINK_DIRS "${BUILD_DIR}/pytorch_android_lite*.aar/jni/${ANDROID_ABI}")
+# file (GLOB TORCHVISION_LIBRARY_DIRS "/home/leruo/torchvision")
+# file (GLOB TORCHVISION_LIBRARY_DIRS "${NODE_MODULES_DIR}/torchvision/build/lib.linux-x86_64-3.10/torchvision")
+# file (GLOB TORCHVISION_LIBRARY_DIRS "/usr/local/lib/python3.10/dist-packages/torchvision/_C.so")
+
+
 
 find_library(
         LOG_LIB
@@ -111,6 +130,27 @@ find_library(
         PATHS ${PYTORCH_LINK_DIRS}
         NO_CMAKE_FIND_ROOT_PATH
 )
+# find_package(TorchVision REQUIRED)
+# target_link_libraries(torchvision PUBLIC TorchVision::TorchVision)
+# find_package(
+#         TorchVision
+#         TorchVision_DIR "/home/leruo/torchvision/cmake"
+#         REQUIRED
+# )
+# add_library(
+#         "torchvision"
+#         SHARED
+#         "/home/leruo/torchvision/CMakeLists.txt"
+#        "/home/leruo/torchvision/torchvision/csrc/vision.cpp"
+#        "/home/leruo/torchvision/torchvision/csrc/ops/cpp"
+#        ${TORCHVISION_LIBRARY_DIRS}
+# )
+#find_library(
+#        TORCHVISION_LIBRARY
+#        NAMES torchvision
+#        PATHS ${TORCHVISION_LIBRARY_DIRS}
+#        NO_CMAKE_FIND_ROOT_PATH
+#)
 
 # For RN 0.66+, use the distributed libjsi.so
 if(${REACT_NATIVE_MINOR_VERSION} GREATER_EQUAL 66)
@@ -131,5 +171,6 @@ target_link_libraries(
         ${PYTORCH_LIBRARY}
         ${FBJNI_LIBRARY}
         ${JSI_LIB}
+        # TorchVision::TorchVision
         android
 )

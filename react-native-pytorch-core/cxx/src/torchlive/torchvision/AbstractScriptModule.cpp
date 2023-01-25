@@ -53,6 +53,7 @@ bool IOU(std::array<float, 5> a, std::array<float, 5> b) {
 
 c10::IValue AbstractScriptModule::nms(c10::IValue output) {
   at::Tensor tensor = output.toTensor();
+  __android_log_print(ANDROID_LOG_ERROR, "leruo", "{1} output[0]=%ld", tensor.size(0));
   int rows = tensor.size(0);
   // float results[rows][5];
   std::vector<std::array<float, 5>> results;
@@ -74,7 +75,21 @@ c10::IValue AbstractScriptModule::nms(c10::IValue output) {
     // auto outputs = accessor[i].data();
     // Only consider an object detected if it has a confidence score of over predictionThreshold
     float score = outputs[4];
-    if (score > predictionThreshold) {
+    __android_log_print(
+      ANDROID_LOG_ERROR, "leruo",
+      std::format("{:6}", (score > predictionThreshold + std::numeric_limits<float>::epsilon()))
+    );
+    __android_log_print(
+      ANDROID_LOG_ERROR, "leruo",
+      "{2} index=%d 0=%d 1=%d 2=%d 3=%d 4=%d",
+      i,
+      outputs[0],
+      outputs[1],
+      outputs[2],
+      outputs[3],
+      outputs[4]
+    );
+    if (score > predictionThreshold + std::numeric_limits<float>::epsilon()) {
       // Calulate the bound of the detected object bounding box
       auto x = outputs[0];
       auto y = outputs[1];
@@ -92,6 +107,11 @@ c10::IValue AbstractScriptModule::nms(c10::IValue output) {
         score,
       };
       results.push_back(bounds);
+      __android_log_print(
+        ANDROID_LOG_ERROR, "leruo",
+        "{2.1} results=%d score=%d",
+        results.size(), score
+      );
       // results[i][0] = startX + left;
       // results[i][1] = startY + top;
       // results[i][2] = w * imgScaleX;
@@ -137,6 +157,14 @@ c10::IValue AbstractScriptModule::nms(c10::IValue output) {
       boundsTensor.index_put_({2}, results[i][2]);
       boundsTensor.index_put_({3}, results[i][3]);
       boundsTensor.index_put_({4}, results[i][4]);
+      __android_log_print(
+        ANDROID_LOG_ERROR, "leruo",
+        "{3} x=%d y=%d w=%d h=%d",
+        results[i][0],
+        results[i][1],
+        results[i][2],
+        results[i][3]
+      );
       resultsTensor.index_put_({i}, boundsTensor);
       totalResults++;
       if (totalResults >= nMSLimit) break;
@@ -157,9 +185,9 @@ c10::IValue AbstractScriptModule::nms(c10::IValue output) {
     }
   }
 
-  resultsTensor.resize_(totalResults);
+  // resultsTensor.resize_(totalResults);
 
-  __android_log_print(ANDROID_LOG_ERROR, "leruo", "leruo size[0]=%ld dim=%ld final_results=%d above_thresh_results=%d", resultsTensor.size(0), resultsTensor.dim(), totalResults, resultsSize);
+  // __android_log_print(ANDROID_LOG_ERROR, "leruo", "{4} size[0]=%ld dim=%ld final_results=%d above_thresh_results=%d", resultsTensor.size(0), resultsTensor.dim(), totalResults, resultsSize);
   // std::stringstream ss1;
   // std::stringstream ss2;
   // assigning the value of num_float to ss1
@@ -181,6 +209,7 @@ c10::IValue AbstractScriptModule::nms(c10::IValue output) {
 
 c10::IValue AbstractScriptModule::forward(
     std::vector<torch_::jit::IValue> inputs) {
+  __android_log_print(ANDROID_LOG_ERROR, "leruo ", "forwarding");
   return AbstractScriptModule::nms(this->scriptmodule_.forward(inputs));
 }
 
